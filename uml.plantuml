@@ -1,0 +1,209 @@
+@startuml TPO_ListadoAnimes
+' ====================================================
+' PAQUETE 1: MODEL (Dominio, Datos, Estrategias)
+' ====================================================
+package Model {
+    enum EstadoAnime {
+        POR_VER
+        VIENDO
+        FINALIZADO
+        ABANDONADO
+    }
+    
+    enum Genero {
+        SHONEN
+        SHOJO
+        SEINEN
+        JOSEI
+        MECHA
+        ISEKAI
+        SLICE_OF_LIFE
+    }
+    enum Estudios {
+        STUDIO_GHIBLI
+        MAPPA
+        WIT_STUDIO
+        BONES
+        TOEI_ANIMATION
+    }
+
+    abstract class Anime {
+        - titulo : String
+        - anhoLanzamiento : int
+        - calificacionUsuario : int
+        - estado : EstadoAnime
+        - generos : List<Genero>
+        - estudio : Estudios
+        - cantidadDeCapitulos: int
+        --
+        + getTitulo() : String
+        + getCalificacion() : int
+    }
+
+    class AnimeSerie{
+        - cantidadDeCapitulos: int
+        + getCantidadDeCapitulos(): int
+    }
+    class AnimePelicula{
+        - duracion: int
+        + getDuracion(): int
+    }
+    
+    class Catalogo {
+        - animes : List<Anime>
+        - listasPersonalizadas : List<ListaPersonalizada>
+        + agregarAnime(a : Anime) : void
+        + agregarListaPersonalizada(a: ListaPersonalizada): void
+        + getListaAnimes() : List<Anime>
+        + getListas(): List<ListaPersonalizada>
+    }
+
+    class ListaPersonalizada {
+        - nombre : String
+        - animes : List<Anime>
+
+        + agregarAnime(a : Anime) : void
+    }
+
+    Catalogo "1" -- "0..*" Anime : gestiona
+    Catalogo "1" -- "0..*" ListaPersonalizada : gestiona_listas
+    Anime "0.." -- "0.." ListaPersonalizada : pertenece_a
+    Anime --|> AnimeSerie
+    Anime --|>AnimePelicula
+}
+
+
+' ====================================================
+' PAQUETE 2: REPOSITORIO 
+' ====================================================
+package Repository {
+    interface AnimeRepositorio   {
+        + guardarCatalogo(catalogo: Catalogo): void 
+        + actualizarCatalogo(catalogo:Catalogo): void
+        + eliminarCatalogo(): void
+        + obtenerCatalogo(): Catalogo
+    }
+    class EnMemoriAnimeRepositorio{
+        - rutaDelArchivo : String
+    }
+}
+AnimeRepositorio <|.. EnMemoriAnimeRepositorio  
+
+' ====================================================
+' PAQUETE 3: SERVICE (Lógica de Negocio / SRP / GRASP Controller)
+' ====================================================
+package Service {
+    class Estadisticas {
+        - catalogo : Catalogo
+        --
+        + Estadisticas(catalogo : Catalogo)
+        + contarPorEstado() : Map<EstadoAnime, int>
+        + topGenerosFrecuentes(n : int) : List<Genero>
+    }
+    
+    interface ObtenerEstadistica{
+      +getEstadistica(): void
+    }
+    
+    class PromedioGlobal{
+      +getEstadistica(): void
+    }
+    
+    class PromedioPorGenero{
+      +getEstadistica(): void
+    }
+
+    class AnimeService {
+        - repositorio : AnimeRepositorio
+        - catalogo : Catalogo
+        + AnimeService(repo : AnimeRepositorio): void
+        + agregarAnime(a : Anime): void
+        + actualizarAnime(a : Anime): void
+        + guardarDatos() : void
+        + cargarDatos() : void
+
+        + buscarYFiltrarAnimes() : List<Anime>
+        + recomendarAnime() : List<Anime>
+        + obtenerEstadisticas() : double
+    }
+    interface ServicioBusqueda {
+        + buscar(criterio: String): List<Anime>
+    }
+
+    interface FiltroCriterio {
+        + filtrar(lista: List<Anime>): List<Anime>
+    }
+
+    class FiltroPorNombre implements FiltroCriterio {
+        + nombre: String
+        + filtrar(lista: List<Anime>): List<Anime>
+    }
+
+    class BusquedaPorAnho implements ServicioBusqueda {
+        + anhoInicio: Date
+        + anhoFin: Date
+        + buscar(criterio: String): List<Anime>
+    }
+
+    class FiltroPorEstado implements FiltroCriterio {
+        + estado: EstadoAnime
+        + filtrar(lista: List<Anime>): List<Anime>
+    }
+
+    class BusquedaPorNombre implements ServicioBusqueda {
+        - nombre: String
+        + buscar(criterio: String): List<Anime>
+    }
+
+    class AplicadorFiltros {
+        + aplicar(lista: List<Anime>, filtros: List<String>): List<Anime>
+    }
+
+    class BusquedaYFiltradoManager {
+        - servicioBusqueda: ServicioBusqueda
+        - aplicadorFiltros: AplicadorFiltros
+        
+        + realizarBusquedaYFiltrado(busqueda: String, criterios: List<FiltroCriterio>): List<Anime>
+    }
+
+    class ListaRecomendacion {
+        + generarListadoDeRecomendacion(catalogo: Catalogo): List<ListaPersonalizada>
+    }
+    interface GenerarRecomendacion {
+        + generarListado(catalogo: Catalogo, n: int): List<ListaPersonalizada>
+    }
+    class TopAnimesPorGenero{
+        + generarListado(catalogo: Catalogo, n: int): List<ListaPersonalizada>
+    }
+    class TopCatalogo{
+        + generarListado(catalogo: Catalogo, n: int): List<ListaPersonalizada>
+    }
+    AnimeService ...> ListaRecomendacion
+    ListaRecomendacion ...> GenerarRecomendacion
+    GenerarRecomendacion <|.. TopAnimesPorGenero
+    GenerarRecomendacion <|.. TopCatalogo
+
+    BusquedaYFiltradoManager o-- ServicioBusqueda : usa
+    BusquedaYFiltradoManager o-- AplicadorFiltros : usa
+    AplicadorFiltros .> FiltroCriterio : aplica
+    AnimeService -> AnimeRepositorio : usa
+    AnimeService --> Catalogo : "usa      "
+    AnimeService --> Estadisticas : delega_stats
+    Estadisticas --> ObtenerEstadistica
+    ObtenerEstadistica --> PromedioPorGenero
+    ObtenerEstadistica --> PromedioGlobal
+    AnimeService o-- BusquedaYFiltradoManager : usa/depende
+}
+
+' ====================================================
+' PAQUETE 4: UI (Interfaz de Usuario / Swing)
+' ====================================================
+package UI {
+    class MainFrame{
+        - animeService : AnimeService
+        + mainFrame(service : AnimeService)
+    }
+}
+UI.MainFrame --> AnimeService : invoca_operaciones
+
+@enduml
